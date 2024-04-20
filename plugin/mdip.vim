@@ -89,6 +89,11 @@ function! s:SaveFileTMPLinux(imgdir, tmpname) abort
 endfunction
 
 function! s:SaveFileTMPWin32(imgdir, tmpname) abort
+    let shell_bak = &shell
+    let shellcmdflag_bak = &shellcmdflag
+    let &shell = 'cmd.exe'
+    let &shellcmdflag = '/s /c'
+
     let tmpfile = a:imgdir . '\' . a:tmpname . '.png'
     let tmpfile = substitute(tmpfile, '\\ ', ' ', 'g')
 
@@ -99,6 +104,10 @@ function! s:SaveFileTMPWin32(imgdir, tmpname) abort
     let clip_command = "powershell -nologo -noprofile -noninteractive -sta \"".clip_command. "\""
 
     silent call system(clip_command)
+
+    let &shell = shell_bak
+    let &shellcmdflag = shellcmdflag_bak
+
     if v:shell_error == 1
         return 1
     else
@@ -140,8 +149,13 @@ function! s:SaveNewFile(imgdir, tmpfile)
     let extension = split(a:tmpfile, '\.')[-1]
     let reldir = g:mdip_imgdir
     let cnt = 0
-    let filename = a:imgdir . '/' . g:mdip_imgname . cnt . '.' . extension
-    let relpath = reldir . '/' . g:mdip_imgname . cnt . '.' . extension
+    if empty(g:mdip_imgname)
+      let filename = a:imgdir . '/' . g:mdip_imgname . cnt . '.' . extension
+      let relpath = reldir . '/' . g:mdip_imgname . cnt . '.' . extension
+    else
+      let filename = a:imgdir . '/' . cnt . '.' . extension
+      let relpath = reldir . '/' . cnt . '.' . extension
+    endif
     while filereadable(filename)
         call system('diff ' . a:tmpfile . ' ' . filename)
         if !v:shell_error
@@ -149,8 +163,13 @@ function! s:SaveNewFile(imgdir, tmpfile)
             return relpath
         endif
         let cnt += 1
-        let filename = a:imgdir . '/' . g:mdip_imgname . cnt . '.' . extension
-        let relpath = reldir . '/' . g:mdip_imgname . cnt . '.' . extension
+        if empty(g:mdip_imgname)
+          let filename = a:imgdir . '/' . g:mdip_imgname . cnt . '.' . extension
+          let relpath = reldir . '/' . g:mdip_imgname . cnt . '.' . extension
+        else
+          let filename = a:imgdir . '/' . cnt . '.' . extension
+          let relpath = reldir . '/' . cnt . '.' . extension
+        endif
     endwhile
     if filereadable(a:tmpfile)
         call rename(a:tmpfile, filename)
@@ -193,8 +212,16 @@ function! g:LatexPasteImage(relpath)
     execute "normal! ve\<C-g>"
 endfunction
 
+function! g:TypstPasteImage(relpath)
+        let ipos = getcurpos()
+        execute "normal! iimage(\"" . a:relpath . "\")"
+        call setpos('.', ipos)
+endfunction
+
 function! g:EmptyPasteImage(relpath)
-    execute "normal! i" . a:relpath 
+    let ipos = getcurpos()
+    execute "normal! i" . a:relpath
+    call setpos('.', ipos)
 endfunction
 
 let g:PasteImageFunction = 'g:MarkdownPasteImage'
@@ -212,7 +239,11 @@ function! mdip#MarkdownClipboardImage()
         " change temp-file-name and image-name
         let g:mdip_tmpname = s:InputName()
         if empty(g:mdip_tmpname)
-          let g:mdip_tmpname = g:mdip_imgname . '_' . s:RandomName()
+          if empty(g:mdip_imgname)
+            let g:mdip_tmpname = s:RandomName()
+          else
+            let g:mdip_tmpname = g:mdip_imgname . '_' . s:RandomName()
+          endif
         endif
         let testpath =  workdir . '/' . g:mdip_tmpname . '.png'
         if filereadable(testpath) == 0
