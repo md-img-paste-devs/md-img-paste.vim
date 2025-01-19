@@ -170,11 +170,24 @@ function! s:RandomName()
     return l:new_random
 endfunction
 
+function! g:MarkdownPasteImageNames(A, L, P)
+  let files = glob(s:workdir . '/*.png', '', 1)
+  let names = map(files, 'fnamemodify(v:val, ":t:r")')
+  return filter(names, 'v:val =~ "^" . a:A')
+endfunction
+
 function! s:InputName()
     call inputsave()
-    let name = input('Image name: ')
+    let name = input('Image name: ', '', 'customlist,MarkdownPasteImageNames')
     call inputrestore()
     return name
+endfunction
+
+function! s:Confirm(message)
+    call inputsave()
+    let response = input(a:message)
+    call inputrestore()
+    return response =~ '^y'
 endfunction
 
 function! g:MarkdownPasteImage(relpath)
@@ -208,21 +221,25 @@ function! mdip#MarkdownClipboardImage()
 
     " add check whether file with the name exists
     while  1
-        let workdir = s:SafeMakeDir()
+        let s:workdir = s:SafeMakeDir()
         " change temp-file-name and image-name
         let g:mdip_tmpname = s:InputName()
         if empty(g:mdip_tmpname)
           let g:mdip_tmpname = g:mdip_imgname . '_' . s:RandomName()
         endif
-        let testpath =  workdir . '/' . g:mdip_tmpname . '.png'
+        let testpath =  s:workdir . '/' . g:mdip_tmpname
+        if testpath !~ '\.png$'
+          let testpath = testpath . '.png'
+        endif
         if filereadable(testpath) == 0
             break
-        else
-            echo "\nThis file name already exists"
+        elseif s:Confirm("This file name already exists. Overwrite? [y/n] ")
+            break
+        endif
         endif
     endwhile
 
-    let tmpfile = s:SaveFileTMP(workdir, g:mdip_tmpname)
+    let tmpfile = s:SaveFileTMP(s:workdir, g:mdip_tmpname)
     if tmpfile == 1
         return
     else
